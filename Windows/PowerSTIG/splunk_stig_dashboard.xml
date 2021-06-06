@@ -6,7 +6,7 @@
       <fieldForLabel>ComputerName</fieldForLabel>
       <fieldForValue>ComputerName</fieldForValue>
       <search>
-        <query>index=main earliest=-30d | stats values(ComputerName) AS ComputerName</query>
+        <query>index=main sourcetype="powerstig:json" earliest=-30d | stats values(ComputerName) AS ComputerName</query>
         <earliest>-24h@h</earliest>
         <latest>now</latest>
       </search>

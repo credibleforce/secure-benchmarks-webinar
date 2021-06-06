@@ -6,7 +6,7 @@
       <fieldForLabel>ansible_host</fieldForLabel>
       <fieldForValue>ansible_host</fieldForValue>
       <search>
-        <query>index=main ansible_task.name="* | * | PATCH | *" earliest=-30d 
+        <query>index=main "ansible_task.tags{}"="ansible-lockdown" ansible_task.name="* | * | PATCH | *" earliest=-30d 
 |  stats count by ansible_host |  fields - count</query>
         <earliest>-24h@h</earliest>
         <latest>now</latest>
@@ -17,7 +17,7 @@
       <fieldForLabel>ScanDate</fieldForLabel>
       <fieldForValue>session</fieldForValue>
       <search>
-        <query>index=main ansible_task.name="* | * | PATCH | *" earliest=-30d ansible_result.changed=* ansible_host=win19-srv1 ansible_task.tags{}=* ansible_host=$computer_token$ 
+        <query>index=main "ansible_task.tags{}"="ansible-lockdown" ansible_task.name="* | * | PATCH | *" earliest=-30d ansible_result.changed=* ansible_host=win19-srv1 ansible_task.tags{}=* ansible_host=$computer_token$ 
 |  stats first(timestamp) AS ScanDate by session</query>
         <earliest>-24h@h</earliest>
         <latest>now</latest>
@@ -29,7 +29,7 @@
       <fieldForLabel>BenchmarkID</fieldForLabel>
       <fieldForValue>BenchmarkID</fieldForValue>
       <search>
-        <query>index=main ansible_task.name="* | * | PATCH | *" earliest=-30d 
+        <query>index=main "ansible_task.tags{}"="ansible-lockdown" ansible_task.name="* | * | PATCH | *" earliest=-30d 
 | eval benchmark_details=split('ansible_task.name'," | ") 
 | eval ScanID=session, BenchmarkID=mvindex(benchmark_details,1) 
 |  stats count by BenchmarkID 
@@ -52,7 +52,7 @@
       <fieldForLabel>ansible_task.tags{}</fieldForLabel>
       <fieldForValue>ansible_task.tags{}</fieldForValue>
       <search>
-        <query>index=main ansible_task.name="* | * | PATCH | *"  earliest=-30d
+        <query>index=main "ansible_task.tags{}"="ansible-lockdown" ansible_task.name="* | * | PATCH | *"  earliest=-30d
 |  stats count by "ansible_task.tags{}" 
 |  fields - count</query>
         <earliest>-24h@h</earliest>
@@ -73,7 +73,7 @@
       <title>Pass</title>
       <single>
         <search>
-          <query>index=main ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed="false" ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$ session=$scan_token$
+          <query>index=main "ansible_task.tags{}"="ansible-lockdown" ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed="false" ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$ session=$scan_token$
 |  stats count</query>
           <earliest>$field1.earliest$</earliest>
           <latest>$field1.latest$</latest>
@@ -90,7 +90,7 @@
       <title>Fail</title>
       <single>
         <search>
-          <query>index=main ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed="true" ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$  session=$scan_token$
+          <query>index=main "ansible_task.tags{}"="ansible-lockdown" ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed="true" ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$  session=$scan_token$
 |  stats count</query>
           <earliest>$field1.earliest$</earliest>
           <latest>$field1.latest$</latest>
@@ -108,7 +108,7 @@
     <panel>
       <chart>
         <search>
-          <query>index=main ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed=$status_token$ ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$ session=$scan_token$
+          <query>index=main "ansible_task.tags{}"="ansible-lockdown" ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed=$status_token$ ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$ session=$scan_token$
 |  eval Status=if('ansible_result.changed'=="false","Pass","FAIL")
 |  stats count by Status</query>
           <earliest>$field1.earliest$</earliest>
@@ -125,7 +125,7 @@
     <panel>
       <table>
         <search>
-          <query>index=main ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed=$status_token$ ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$ session=$scan_token$
+          <query>index=main "ansible_task.tags{}"="ansible-lockdown" ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed=$status_token$ ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$ session=$scan_token$
 | eval benchmark_details=split('ansible_task.name'," | ") 
 | eval ScanID=session, ComputerName=ansible_host, BenchmarkID=mvindex(benchmark_details,1), Scored=if(mvindex(benchmark_details,0)=="SCORED","true","false"), BenchmarkName=mvindex(benchmark_details,3), Status=if('ansible_result.changed'=="false","Pass","FAIL"), Tags='ansible_task.tags{}', TaskStatus=status
 |  table ScanID, ComputerName, BenchmarkID, BenchmarkName, Scored, Status, TaskStatus, Tags</query>

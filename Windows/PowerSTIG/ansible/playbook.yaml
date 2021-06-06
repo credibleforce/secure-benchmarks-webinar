@@ -1,346 +1,351 @@
 ---
 - hosts: all
   tasks:
-    - name: Is check mode
-      debug:
-        msg: 
-            - "Ansible Check Mode: {{ ansible_check_mode }}"
-    
-    - name: Used to force execution in check_mode for unsupported types
-      set_fact:
-        test_only: "{{ ansible_check_mode | default(False) | bool }}"
-
-    - name: Setup Powerstig
-      check_mode: no
-      register: script_result
-      win_shell: |
-        Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-        Set-Item -Path WSMan:\localhost\MaxEnvelopeSizeKb -Value 2048
-        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope AllUsers
-        if ($false -eq (get-packagesource | Where-Object { $_.Name -eq "PSGallery" } | % { $_.istrusted })){ 
-            Set-PackageSource -Name PSGallery -Trusted -Force 
-        }
-
-        function installModules($modulelist){
-            $modulelist | % {
-                install-module $_ -Force
-            }
-        }
-
-        # check to see if powerstig is installed
-        if((Get-InstalledModule -Name PowerStig) -eq $null){
-            install-module powerstig -scope CurrentUser
+    - name: Powerstig Execution
+      block:
+        - name: Is check mode
+          debug:
+            msg: 
+                - "Ansible Check Mode: {{ ansible_check_mode }}"
         
+        - name: Used to force execution in check_mode for unsupported types
+          set_fact:
+            test_only: "{{ ansible_check_mode | default(False) | bool }}"
 
-            # install all modules with no fixed version depedancy
-            $required = (Get-Module PowerStig -ListAvailable).RequiredModules
-            installModules $required
+        - name: Setup Powerstig
+          check_mode: no
+          register: script_result
+          win_shell: |
+            Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+            Set-Item -Path WSMan:\localhost\MaxEnvelopeSizeKb -Value 2048
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope AllUsers
+            if ($false -eq (get-packagesource | Where-Object { $_.Name -eq "PSGallery" } | % { $_.istrusted })){ 
+                Set-PackageSource -Name PSGallery -Trusted -Force 
+            }
 
-            # ensure required fixed version modules are installed
-            install-module AccessControlDsc -MaximumVersion 1.4.1 -Force
-            install-module WindowsDefenderDsc -MaximumVersion 2.1.0 -Force
-        }
-      
-
-    - name: Create temporary directory for mof
-      check_mode: no
-      win_file:
-        path: C:\DSC
-        state: directory
-
-    - name: Copy DSC mof template
-      check_mode: no
-      win_copy:
-        src: files/localhost.mof
-        dest: C:\DSC\
-
-    - name: Run Check Mode TestDSC
-      check_mode: no
-      when: 
-        - (test_only|bool)
-      register: script_result
-      win_shell: |
-        $splunk_server = "{{ lookup('env','SPLUNK_HEC_SERVER') }}"
-        $splunk_port = "{{ lookup('env','SPLUNK_HEC_PORT') }}"
-        $splunk_token = "{{ lookup('env','SPLUNK_HEC_TOKEN') }}"
-        $scan_id= [Math]::Floor([decimal](Get-Date(Get-Date).ToUniversalTime()-uformat "%s"))
-        $sourcetype = "powerstig:json"
-        $computer_name = $env:COMPUTERNAME
-
-        # only required if Splunk is using self-signed or untrusted certificate
-        if (-not ([System.Management.Automation.PSTypeName]'ServerCertificateValidationCallback').Type)
-        {
-        $certCallback = @"
-            using System;
-            using System.Net;
-            using System.Net.Security;
-            using System.Security.Cryptography.X509Certificates;
-            public class ServerCertificateValidationCallback
-            {
-                public static void Ignore()
-                {
-                    if(ServicePointManager.ServerCertificateValidationCallback ==null)
-                    {
-                        ServicePointManager.ServerCertificateValidationCallback += 
-                            delegate
-                            (
-                                Object obj, 
-                                X509Certificate certificate, 
-                                X509Chain chain, 
-                                SslPolicyErrors errors
-                            )
-                            {
-                                return true;
-                            };
-                    }
+            function installModules($modulelist){
+                $modulelist | % {
+                    install-module $_ -Force
                 }
             }
-        "@
-            Add-Type $certCallback
-        }
 
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
-        [ServerCertificateValidationCallback]::Ignore()
-
-        function hec_log($logLine){
-            $url = "https://${splunk_server}:${splunk_port}/services/collector/event"
-            $header = @{Authorization = "Splunk ${splunk_token}"}
+            # check to see if powerstig is installed
+            if((Get-InstalledModule -Name PowerStig) -eq $null){
+                install-module powerstig -scope CurrentUser
             
-            # for array we split and send each
-            if($logLine -is [array]){
-                $logLine | % {
+
+                # install all modules with no fixed version depedancy
+                $required = (Get-Module PowerStig -ListAvailable).RequiredModules
+                installModules $required
+
+                # ensure required fixed version modules are installed
+                install-module AccessControlDsc -MaximumVersion 1.4.1 -Force
+                install-module WindowsDefenderDsc -MaximumVersion 2.1.0 -Force
+            }
+          
+
+        - name: Create temporary directory for mof
+          check_mode: no
+          win_file:
+            path: C:\DSC
+            state: directory
+
+        - name: Copy DSC mof template
+          check_mode: no
+          win_copy:
+            src: files/localhost.mof
+            dest: C:\DSC\
+
+        - name: Run Check Mode TestDSC
+          check_mode: no
+          when: 
+            - (test_only|bool)
+          register: script_result
+          win_shell: |
+            $splunk_server = "{{ lookup('env','SPLUNK_HEC_SERVER') }}"
+            $splunk_port = "{{ lookup('env','SPLUNK_HEC_PORT') }}"
+            $splunk_token = "{{ lookup('env','SPLUNK_HEC_TOKEN') }}"
+            $scan_id= [Math]::Floor([decimal](Get-Date(Get-Date).ToUniversalTime()-uformat "%s"))
+            $sourcetype = "powerstig:json"
+            $computer_name = $env:COMPUTERNAME
+
+            # only required if Splunk is using self-signed or untrusted certificate
+            if (-not ([System.Management.Automation.PSTypeName]'ServerCertificateValidationCallback').Type)
+            {
+            $certCallback = @"
+                using System;
+                using System.Net;
+                using System.Net.Security;
+                using System.Security.Cryptography.X509Certificates;
+                public class ServerCertificateValidationCallback
+                {
+                    public static void Ignore()
+                    {
+                        if(ServicePointManager.ServerCertificateValidationCallback ==null)
+                        {
+                            ServicePointManager.ServerCertificateValidationCallback += 
+                                delegate
+                                (
+                                    Object obj, 
+                                    X509Certificate certificate, 
+                                    X509Chain chain, 
+                                    SslPolicyErrors errors
+                                )
+                                {
+                                    return true;
+                                };
+                        }
+                    }
+                }
+            "@
+                Add-Type $certCallback
+            }
+
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+            [ServerCertificateValidationCallback]::Ignore()
+
+            function hec_log($logLine){
+                $url = "https://${splunk_server}:${splunk_port}/services/collector/event"
+                $header = @{Authorization = "Splunk ${splunk_token}"}
+                
+                # for array we split and send each
+                if($logLine -is [array]){
+                    $logLine | % {
+                        $event = @{ 
+                            source = $sourcetype
+                            sourcetype = $sourcetype
+                            event = $_ 
+                        } | ConvertTo-Json -Compress
+                        $result = Invoke-RestMethod -Method Post -Uri $url -Headers $header -Body $event
+                    }
+                }else{
                     $event = @{ 
                         source = $sourcetype
                         sourcetype = $sourcetype
-                        event = $_ 
+                        event = $logLine 
                     } | ConvertTo-Json -Compress
+                    $event
                     $result = Invoke-RestMethod -Method Post -Uri $url -Headers $header -Body $event
                 }
-            }else{
-                $event = @{ 
-                    source = $sourcetype
-                    sourcetype = $sourcetype
-                    event = $logLine 
-                } | ConvertTo-Json -Compress
-                $event
-                $result = Invoke-RestMethod -Method Post -Uri $url -Headers $header -Body $event
             }
-        }
 
-        $result = $(Test-DscConfiguration -ComputerName $computer_name -ReferenceConfiguration "C:\DSC\localhost.mof")
-        $total_reviewed = ($result.ResourcesInDesiredState.Count + $result.ResourcesNotInDesiredState.Count)
-        $score  = [Math]::Round(($result.ResourcesInDesiredState.Count/$total_reviewed)*100)
+            $result = $(Test-DscConfiguration -ComputerName $computer_name -ReferenceConfiguration "C:\DSC\localhost.mof")
+            $total_reviewed = ($result.ResourcesInDesiredState.Count + $result.ResourcesNotInDesiredState.Count)
+            $score  = [Math]::Round(($result.ResourcesInDesiredState.Count/$total_reviewed)*100)
 
-        $result.ResourcesNotInDesiredState | %{
-            $_.InstanceName -match '(V-\d+)(\.([a-z]))*'
-            $RuleID = ""
-            $RuleIdSubset = ""
-            $Severity = ""
-            if($Matches[1] -ne $null){
-                $RuleId = $Matches[1]
+            $result.ResourcesNotInDesiredState | %{
+                $_.InstanceName -match '(V-\d+)(\.([a-z]))*'
+                $RuleID = ""
+                $RuleIdSubset = ""
+                $Severity = ""
+                if($Matches[1] -ne $null){
+                    $RuleId = $Matches[1]
+                }
+                if($Matches[3] -ne $null){
+                    $RuleIdSubset = $Matches[3]    
+                }
+                $_.InstanceName -match '\[(low|medium|high)\]'
+                if($Matches[1] -ne $null){
+                    $Severity = $Matches[1]
+                }
+                $obj = @{
+                    "ScanID" = $scan_id
+                    "Score" = $score
+                    "ComputerName" = $computer_Name
+                    "Name" = $_.ConfigurationName
+                    #"InitialState" = $_.InitialState
+                    #"FinalState" = $_.FinalState
+                    "InDesiredState" = $_.InDesiredState
+                    "InstanceName"  = $_.InstanceName
+                    "VulnNum" = $RuleId
+                    "VulnNumSubset" = $RuleIdSubset
+                    "Severity" = $Severity
+                }
+                hec_log ($obj)
+                
             }
-            if($Matches[3] -ne $null){
-                $RuleIdSubset = $Matches[3]    
-            }
-            $_.InstanceName -match '\[(low|medium|high)\]'
-            if($Matches[1] -ne $null){
-                $Severity = $Matches[1]
-            }
-            $obj = @{
-                "ScanID" = $scan_id
-                "Score" = $score
-                "ComputerName" = $computer_Name
-                "Name" = $_.ConfigurationName
-                #"InitialState" = $_.InitialState
-                #"FinalState" = $_.FinalState
-                "InDesiredState" = $_.InDesiredState
-                "InstanceName"  = $_.InstanceName
-                "VulnNum" = $RuleId
-                "VulnNumSubset" = $RuleIdSubset
-                "Severity" = $Severity
-            }
-            hec_log ($obj)
-            
-        }
 
-        $result.ResourcesInDesiredState | %{
-            $_.InstanceName -match '(V-\d+)(\.([a-z]))*'
-            $RuleID = ""
-            $RuleIdSubset = ""
-            $Severity = ""
-            if($Matches[1] -ne $null){
-                $RuleId = $Matches[1]
+            $result.ResourcesInDesiredState | %{
+                $_.InstanceName -match '(V-\d+)(\.([a-z]))*'
+                $RuleID = ""
+                $RuleIdSubset = ""
+                $Severity = ""
+                if($Matches[1] -ne $null){
+                    $RuleId = $Matches[1]
+                }
+                if($Matches[3] -ne $null){
+                    $RuleIdSubset = $Matches[3]    
+                }
+                $_.InstanceName -match '\[(low|medium|high)\]'
+                if($Matches[1] -ne $null){
+                    $Severity = $Matches[1]
+                }
+                $obj = @{
+                    "ScanID" = $scan_id
+                    "Score" = $score
+                    "ComputerName" = $computer_Name
+                    "Name" = $_.ConfigurationName
+                    #"InitialState" = $_.InitialState
+                    #"FinalState" = $_.FinalState
+                    "InDesiredState" = $_.InDesiredState
+                    "InstanceName"  = $_.InstanceName
+                    "VulnNum" = $RuleId
+                    "VulnNumSubset" = $RuleIdSubset
+                    "Severity" = $Severity
+                }
+                hec_log ($obj)
+                
             }
-            if($Matches[3] -ne $null){
-                $RuleIdSubset = $Matches[3]    
-            }
-            $_.InstanceName -match '\[(low|medium|high)\]'
-            if($Matches[1] -ne $null){
-                $Severity = $Matches[1]
-            }
-            $obj = @{
-                "ScanID" = $scan_id
-                "Score" = $score
-                "ComputerName" = $computer_Name
-                "Name" = $_.ConfigurationName
-                #"InitialState" = $_.InitialState
-                #"FinalState" = $_.FinalState
-                "InDesiredState" = $_.InDesiredState
-                "InstanceName"  = $_.InstanceName
-                "VulnNum" = $RuleId
-                "VulnNumSubset" = $RuleIdSubset
-                "Severity" = $Severity
-            }
-            hec_log ($obj)
-            
-        }
-    
-    - name: Run StartDSC
-      check_mode: no
-      when: 
-        - not (test_only|bool)
-      register: script_result
-      win_shell: |
-        $splunk_server = "{{ lookup('env','SPLUNK_HEC_SERVER') }}"
-        $splunk_port = "{{ lookup('env','SPLUNK_HEC_PORT') }}"
-        $splunk_token = "{{ lookup('env','SPLUNK_HEC_TOKEN') }}"
-        $scan_id= [Math]::Floor([decimal](Get-Date(Get-Date).ToUniversalTime()-uformat "%s"))
-        $sourcetype = "powerstig:json"
-        $computer_name = $env:COMPUTERNAME
+        
+        - name: Run StartDSC
+          check_mode: no
+          when: 
+            - not (test_only|bool)
+          register: script_result
+          win_shell: |
+            $splunk_server = "{{ lookup('env','SPLUNK_HEC_SERVER') }}"
+            $splunk_port = "{{ lookup('env','SPLUNK_HEC_PORT') }}"
+            $splunk_token = "{{ lookup('env','SPLUNK_HEC_TOKEN') }}"
+            $scan_id= [Math]::Floor([decimal](Get-Date(Get-Date).ToUniversalTime()-uformat "%s"))
+            $sourcetype = "powerstig:json"
+            $computer_name = $env:COMPUTERNAME
 
-        # only required if Splunk is using self-signed or untrusted certificate
-        if (-not ([System.Management.Automation.PSTypeName]'ServerCertificateValidationCallback').Type)
-        {
-        $certCallback = @"
-            using System;
-            using System.Net;
-            using System.Net.Security;
-            using System.Security.Cryptography.X509Certificates;
-            public class ServerCertificateValidationCallback
+            # only required if Splunk is using self-signed or untrusted certificate
+            if (-not ([System.Management.Automation.PSTypeName]'ServerCertificateValidationCallback').Type)
             {
-                public static void Ignore()
+            $certCallback = @"
+                using System;
+                using System.Net;
+                using System.Net.Security;
+                using System.Security.Cryptography.X509Certificates;
+                public class ServerCertificateValidationCallback
                 {
-                    if(ServicePointManager.ServerCertificateValidationCallback ==null)
+                    public static void Ignore()
                     {
-                        ServicePointManager.ServerCertificateValidationCallback += 
-                            delegate
-                            (
-                                Object obj, 
-                                X509Certificate certificate, 
-                                X509Chain chain, 
-                                SslPolicyErrors errors
-                            )
-                            {
-                                return true;
-                            };
+                        if(ServicePointManager.ServerCertificateValidationCallback ==null)
+                        {
+                            ServicePointManager.ServerCertificateValidationCallback += 
+                                delegate
+                                (
+                                    Object obj, 
+                                    X509Certificate certificate, 
+                                    X509Chain chain, 
+                                    SslPolicyErrors errors
+                                )
+                                {
+                                    return true;
+                                };
+                        }
                     }
                 }
+            "@
+                Add-Type $certCallback
             }
-        "@
-            Add-Type $certCallback
-        }
 
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
-        [ServerCertificateValidationCallback]::Ignore()
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+            [ServerCertificateValidationCallback]::Ignore()
 
-        function hec_log($logLine){
-            $url = "https://${splunk_server}:${splunk_port}/services/collector/event"
-            $header = @{Authorization = "Splunk ${splunk_token}"}
-            
-            # for array we split and send each
-            if($logLine -is [array]){
-                $logLine | % {
+            function hec_log($logLine){
+                $url = "https://${splunk_server}:${splunk_port}/services/collector/event"
+                $header = @{Authorization = "Splunk ${splunk_token}"}
+                
+                # for array we split and send each
+                if($logLine -is [array]){
+                    $logLine | % {
+                        $event = @{ 
+                            source = $sourcetype
+                            sourcetype = $sourcetype
+                            event = $_ 
+                        } | ConvertTo-Json -Compress
+                        $result = Invoke-RestMethod -Method Post -Uri $url -Headers $header -Body $event
+                    }
+                }else{
                     $event = @{ 
                         source = $sourcetype
                         sourcetype = $sourcetype
-                        event = $_ 
+                        event = $logLine 
                     } | ConvertTo-Json -Compress
+                    $event
                     $result = Invoke-RestMethod -Method Post -Uri $url -Headers $header -Body $event
                 }
-            }else{
-                $event = @{ 
-                    source = $sourcetype
-                    sourcetype = $sourcetype
-                    event = $logLine 
-                } | ConvertTo-Json -Compress
-                $event
-                $result = Invoke-RestMethod -Method Post -Uri $url -Headers $header -Body $event
             }
-        }
 
-        # apply dsc
-        Start-DscConfiguration -Path 'C:\DSC' -Wait -Force
+            # apply dsc
+            Start-DscConfiguration -Path 'C:\DSC' -Wait -Force
 
-        $result = $(Test-DscConfiguration -ComputerName $computer_name -ReferenceConfiguration "C:\DSC\localhost.mof")
-        $total_reviewed = ($result.ResourcesInDesiredState.Count + $result.ResourcesNotInDesiredState.Count)
-        $score  = [Math]::Round(($result.ResourcesInDesiredState.Count/$total_reviewed)*100)
+            $result = $(Test-DscConfiguration -ComputerName $computer_name -ReferenceConfiguration "C:\DSC\localhost.mof")
+            $total_reviewed = ($result.ResourcesInDesiredState.Count + $result.ResourcesNotInDesiredState.Count)
+            $score  = [Math]::Round(($result.ResourcesInDesiredState.Count/$total_reviewed)*100)
 
-        $result.ResourcesNotInDesiredState | %{
-            $_.InstanceName -match '(V-\d+)(\.([a-z]))*'
-            $RuleID = ""
-            $RuleIdSubset = ""
-            $Severity = ""
-            if($Matches[1] -ne $null){
-                $RuleId = $Matches[1]
+            $result.ResourcesNotInDesiredState | %{
+                $_.InstanceName -match '(V-\d+)(\.([a-z]))*'
+                $RuleID = ""
+                $RuleIdSubset = ""
+                $Severity = ""
+                if($Matches[1] -ne $null){
+                    $RuleId = $Matches[1]
+                }
+                if($Matches[3] -ne $null){
+                    $RuleIdSubset = $Matches[3]    
+                }
+                $_.InstanceName -match '\[(low|medium|high)\]'
+                if($Matches[1] -ne $null){
+                    $Severity = $Matches[1]
+                }
+                $obj = @{
+                    "ScanID" = $scan_id
+                    "Score" = $score
+                    "ComputerName" = $computer_Name
+                    "Name" = $_.ConfigurationName
+                    #"InitialState" = $_.InitialState
+                    #"FinalState" = $_.FinalState
+                    "InDesiredState" = $_.InDesiredState
+                    "InstanceName"  = $_.InstanceName
+                    "VulnNum" = $RuleId
+                    "VulnNumSubset" = $RuleIdSubset
+                    "Severity" = $Severity
+                }
+                hec_log ($obj)
+                
             }
-            if($Matches[3] -ne $null){
-                $RuleIdSubset = $Matches[3]    
-            }
-            $_.InstanceName -match '\[(low|medium|high)\]'
-            if($Matches[1] -ne $null){
-                $Severity = $Matches[1]
-            }
-            $obj = @{
-                "ScanID" = $scan_id
-                "Score" = $score
-                "ComputerName" = $computer_Name
-                "Name" = $_.ConfigurationName
-                #"InitialState" = $_.InitialState
-                #"FinalState" = $_.FinalState
-                "InDesiredState" = $_.InDesiredState
-                "InstanceName"  = $_.InstanceName
-                "VulnNum" = $RuleId
-                "VulnNumSubset" = $RuleIdSubset
-                "Severity" = $Severity
-            }
-            hec_log ($obj)
-            
-        }
 
-        $result.ResourcesInDesiredState | %{
-            $_.InstanceName -match '(V-\d+)(\.([a-z]))*'
-            $RuleID = ""
-            $RuleIdSubset = ""
-            $Severity = ""
-            if($Matches[1] -ne $null){
-                $RuleId = $Matches[1]
+            $result.ResourcesInDesiredState | %{
+                $_.InstanceName -match '(V-\d+)(\.([a-z]))*'
+                $RuleID = ""
+                $RuleIdSubset = ""
+                $Severity = ""
+                if($Matches[1] -ne $null){
+                    $RuleId = $Matches[1]
+                }
+                if($Matches[3] -ne $null){
+                    $RuleIdSubset = $Matches[3]    
+                }
+                $_.InstanceName -match '\[(low|medium|high)\]'
+                if($Matches[1] -ne $null){
+                    $Severity = $Matches[1]
+                }
+                $obj = @{
+                    "ScanID" = $scan_id
+                    "Score" = $score
+                    "ComputerName" = $computer_Name
+                    "Name" = $_.ConfigurationName
+                    #"InitialState" = $_.InitialState
+                    #"FinalState" = $_.FinalState
+                    "InDesiredState" = $_.InDesiredState
+                    "InstanceName"  = $_.InstanceName
+                    "VulnNum" = $RuleId
+                    "VulnNumSubset" = $RuleIdSubset
+                    "Severity" = $Severity
+                }
+                hec_log ($obj)
+                
             }
-            if($Matches[3] -ne $null){
-                $RuleIdSubset = $Matches[3]    
-            }
-            $_.InstanceName -match '\[(low|medium|high)\]'
-            if($Matches[1] -ne $null){
-                $Severity = $Matches[1]
-            }
-            $obj = @{
-                "ScanID" = $scan_id
-                "Score" = $score
-                "ComputerName" = $computer_Name
-                "Name" = $_.ConfigurationName
-                #"InitialState" = $_.InitialState
-                #"FinalState" = $_.FinalState
-                "InDesiredState" = $_.InDesiredState
-                "InstanceName"  = $_.InstanceName
-                "VulnNum" = $RuleId
-                "VulnNumSubset" = $RuleIdSubset
-                "Severity" = $Severity
-            }
-            hec_log ($obj)
-            
-        }
 
-    - name: Delete temporary directory for mof
-      check_mode: no
-      win_file:
-        path: C:\DSC
-        state: absent
+        - name: Delete temporary directory for mof
+          check_mode: no
+          win_file:
+            path: C:\DSC
+            state: absent
+      tags: 
+        - powerstig
+        - powerstig-windows-2019
