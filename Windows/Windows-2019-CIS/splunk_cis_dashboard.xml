@@ -1,0 +1,158 @@
+<form>
+  <label>CIS</label>
+  <fieldset submitButton="false">
+    <input type="dropdown" token="computer_token">
+      <label>ComputerName</label>
+      <fieldForLabel>ansible_host</fieldForLabel>
+      <fieldForValue>ansible_host</fieldForValue>
+      <search>
+        <query>index=main ansible_task.name="* | * | PATCH | *" earliest=-30d 
+|  stats count by ansible_host |  fields - count</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+    <input type="dropdown" token="scan_token">
+      <label>ScanDate</label>
+      <fieldForLabel>ScanDate</fieldForLabel>
+      <fieldForValue>session</fieldForValue>
+      <search>
+        <query>index=main ansible_task.name="* | * | PATCH | *" earliest=-30d ansible_result.changed=* ansible_host=win19-srv1 ansible_task.tags{}=* ansible_host=$computer_token$
+|  stats first(timestamp) AS ScanDate by session 
+    |  head 1 
+    |  eval ScanDate="Latest"
+| append 
+    [| search index=main ansible_task.name="* | * | PATCH | *" earliest=-30d ansible_result.changed=* ansible_host=win19-srv1 ansible_task.tags{}=* ansible_host=$computer_token$ NOT  
+        [| search index=main ansible_task.name="* | * | PATCH | *" earliest=-30d ansible_result.changed=* ansible_host=win19-srv1 ansible_task.tags{}=* ansible_host=$computer_token$ 
+        | head 1 
+        |  table session]
+|  stats first(timestamp) AS ScanDate by session 
+    |  head 1 
+|  stats first(timestamp) AS ScanDate by session 
+]</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+    <input type="dropdown" token="benchmark_token">
+      <label>Benchmark ID</label>
+      <choice value="*">All</choice>
+      <fieldForLabel>BenchmarkID</fieldForLabel>
+      <fieldForValue>BenchmarkID</fieldForValue>
+      <search>
+        <query>index=main ansible_task.name="* | * | PATCH | *" earliest=-30d 
+| eval benchmark_details=split('ansible_task.name'," | ") 
+| eval ScanID=session, BenchmarkID=mvindex(benchmark_details,1) 
+|  stats count by BenchmarkID 
+|  fields - count</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="dropdown" token="status_token">
+      <label>Status</label>
+      <choice value="*">All</choice>
+      <choice value="false">Pass</choice>
+      <choice value="true">FAIL</choice>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="dropdown" token="tags_token">
+      <label>Tags</label>
+      <choice value="*">All</choice>
+      <fieldForLabel>ansible_task.tags{}</fieldForLabel>
+      <fieldForValue>ansible_task.tags{}</fieldForValue>
+      <search>
+        <query>index=main ansible_task.name="* | * | PATCH | *"  earliest=-30d
+|  stats count by "ansible_task.tags{}" 
+|  fields - count</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" token="field1">
+      <label></label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Pass</title>
+      <single>
+        <search>
+          <query>index=main ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed="false" ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$ session=$scan_token$
+|  stats count</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x53a051"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Fail</title>
+      <single>
+        <search>
+          <query>index=main ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed="true" ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$  session=$scan_token$
+|  stats count</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0xdc4e41","0xdc4e41"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <search>
+          <query>index=main ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed=$status_token$ ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$ session=$scan_token$
+|  eval Status=if('ansible_result.changed'=="false","Pass","FAIL")
+|  stats count by Status</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="charting.chart">pie</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="charting.fieldColors">{"Pass":0x65a637,"FAIL":0xd93f3c, "Info": 0xeeeeee}</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <search>
+          <query>index=main ansible_task.name="* | $benchmark_token$ | PATCH | *" ansible_result.changed=$status_token$ ansible_host=$computer_token$ ansible_task.tags{}=$tags_token$ session=$scan_token$
+| eval benchmark_details=split('ansible_task.name'," | ") 
+| eval ScanID=session, ComputerName=ansible_host, BenchmarkID=mvindex(benchmark_details,1), Scored=if(mvindex(benchmark_details,0)=="SCORED","true","false"), BenchmarkName=mvindex(benchmark_details,3), Status=if('ansible_result.changed'=="false","Pass","FAIL"), Tags='ansible_task.tags{}', TaskStatus=status
+|  table ScanID, ComputerName, BenchmarkID, BenchmarkName, Scored, Status, TaskStatus, Tags</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

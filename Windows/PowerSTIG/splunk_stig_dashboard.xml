@@ -1,0 +1,131 @@
+<form>
+  <label>PowerSTIG</label>
+  <fieldset submitButton="false">
+    <input type="dropdown" token="computer_token">
+      <label>Computer</label>
+      <fieldForLabel>ComputerName</fieldForLabel>
+      <fieldForValue>ComputerName</fieldForValue>
+      <search>
+        <query>index=main earliest=-30d | stats values(ComputerName) AS ComputerName</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+    <input type="dropdown" token="scanid_token">
+      <label>ScanDate</label>
+      <choice value="*">Latest</choice>
+      <initialValue>*</initialValue>
+      <fieldForLabel>ScanDate</fieldForLabel>
+      <fieldForValue>ScanID</fieldForValue>
+      <search>
+        <query>index=main sourcetype="powerstig:json" earliest=-30d
+|  fields ScanID
+|  convert timeformat="%Y-%m-%d %H:%M:%S.%3f" ctime(ScanID) AS ScanDate 
+|  table ScanID, ScanDate 
+|  head 1</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+    <input type="dropdown" token="severity_token" searchWhenChanged="true">
+      <label>Severity</label>
+      <choice value="*">All</choice>
+      <choice value="High">High</choice>
+      <choice value="Medium">Medium</choice>
+      <choice value="Low">Low</choice>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="dropdown" token="state_token" searchWhenChanged="true">
+      <label>Status</label>
+      <choice value="*">All</choice>
+      <choice value="true">Pass</choice>
+      <choice value="false">Fail</choice>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" token="field1">
+      <label></label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Pass</title>
+      <single>
+        <search>
+          <query>index=main sourcetype="powerstig:json" ScanID=$scanid_token$ Severity=$severity_token$ ComputerName=$computer_token$ InDesiredState=$state_token$ 
+InDesiredState="true"
+| stats count</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x53a051"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Fail</title>
+      <single>
+        <search>
+          <query>index=main sourcetype="powerstig:json" ScanID=$scanid_token$ Severity=$severity_token$ ComputerName=$computer_token$ InDesiredState=$state_token$ 
+InDesiredState="false"
+| stats count</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0xdc4e41","0xdc4e41"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Benchmark Compliance</title>
+      <chart>
+        <search>
+          <query>index=main sourcetype="powerstig:json" ScanID=$scanid_token$ Severity=$severity_token$ ComputerName=$computer_token$ InDesiredState=$state_token$ 
+|  eval Status=case(InDesiredState=="true", "Pass", InDesiredState=="false", "FAIL") 
+| stats count by Status</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="charting.fieldColors">{"Pass":0x65a637,"FAIL":0xd93f3c, "Info": 0xeeeeee}</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Results</title>
+      <table>
+        <search>
+          <query>index=main sourcetype="powerstig:json" Severity=$severity_token$ ComputerName=$computer_token$ InDesiredState=$state_token$ | table VulnNum,ComputerName, InDesiredState | join VulnNum [|search index="stig" earliest=0 sourcetype="stig:json" | table VulnNum, RuleID, RuleVer, RuleTitle, GroupTitle, Severity, VulnDiscuss, FixText] | table VulnNum,ComputerName, InDesiredState, RuleID, RuleVer, RuleTitle, GroupTitle, Severity, VulnDiscuss, FixText</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">progressbar</option>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[https://www.stigviewer.com/stig/microsoft_windows_server_2019/2021-03-05/finding/$click.value$ ]]>
+          </link>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+</form>
