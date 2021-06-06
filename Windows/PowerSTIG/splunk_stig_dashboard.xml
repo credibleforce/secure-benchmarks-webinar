@@ -12,17 +12,14 @@
       </search>
     </input>
     <input type="dropdown" token="scanid_token">
-      <label>ScanDate</label>
-      <choice value="*">Latest</choice>
-      <initialValue>*</initialValue>
+      <label>ScanID</label>
       <fieldForLabel>ScanDate</fieldForLabel>
       <fieldForValue>ScanID</fieldForValue>
       <search>
         <query>index=main sourcetype="powerstig:json" earliest=-30d
 |  fields ScanID
 |  convert timeformat="%Y-%m-%d %H:%M:%S.%3f" ctime(ScanID) AS ScanDate 
-|  table ScanID, ScanDate 
-|  head 1</query>
+|  stats count, first(ScanDate) AS ScanDate by ScanID</query>
         <earliest>-24h@h</earliest>
         <latest>now</latest>
       </search>
